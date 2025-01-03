@@ -39,7 +39,49 @@ def schedule_daily_check():
     est = pytz.timezone("US/Eastern")
     now = datetime.now(tz=est)
     print(f"Scheduler running at {now.strftime('%Y-%m-%d %H:%M:%S')} EST")
-schedule.every().day.at("09:00").do(save_historical_data)
+schedule.every().day.at("08:00").do(save_historical_data)
 
 # Fetch or load historical data
-if os.path.exists(CACHE)
+if os.path.exists(CACHE_FILE):
+    data = pd.read_csv(CACHE_FILE)
+else:
+    data = pd.DataFrame()
+    st.error("No cached data found. Please wait until the next scheduled update.")
+
+# Streamlit App
+st.title("Oil Price Trends and Analysis")
+st.write("This app retrieves historical oil price data and visualizes it.")
+
+if not data.empty:
+    # Process the data
+    data["date"] = pd.to_datetime(data["time"])
+    data["price"] = data["price"].astype(float)
+    data = data.sort_values("date")
+
+    # Visualization
+    st.subheader("Oil Price Trends Over Time")
+    plt.figure(figsize=(10, 5))
+    plt.plot(data["date"], data["price"], marker="o", label="Oil Prices (USD)")
+    plt.title("Historical Oil Prices")
+    plt.xlabel("Date")
+    plt.ylabel("Price (USD per Barrel)")
+    plt.grid()
+    plt.legend()
+    st.pyplot(plt)
+
+    # Insights
+    st.subheader("Insights and Trends")
+    st.write(f"Most Recent Price: ${data['price'].iloc[-1]:.2f} on {data['date'].iloc[-1].strftime('%Y-%m-%d')}")
+    st.write(f"Oldest Price: ${data['price'].iloc[0]:.2f} on {data['date'].iloc[0].strftime('%Y-%m-%d')}")
+    if data["price"].iloc[-1] > data["price"].iloc[-2]:
+        st.write("Oil prices have increased in the most recent period.")
+    else:
+        st.write("Oil prices have decreased in the most recent period.")
+
+else:
+    st.error("No historical data available to visualize.")
+
+# Run the scheduler in the background
+while True:
+    schedule.run_pending()
+    time.sleep(1)
