@@ -1,64 +1,74 @@
 import streamlit as st
 import requests
-import pandas as pd
-import matplotlib.pyplot as plt
+import json
+import os
 
 # API Details
-API_URL = "https://api.oilpriceapi.com/v1/prices/by-period"
+API_URL = "https://api.oilpriceapi.com/v1/prices/latest"
 API_KEY = "2cdd3408dc07625b07f0e294e2e9c1767be6363874694b89beccc6d8f14359e1"
+PREVIOUS_PRICE_FILE = "previous_price.json"
 
-# Function to fetch historical oil prices
-def fetch_historical_oil_prices(start_date, end_date):
+# Function to fetch the latest oil price
+def fetch_latest_oil_price():
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
     }
-    params = {
-        "start": start_date,
-        "end": end_date,
-    }
-    response = requests.get(API_URL, headers=headers, params=params)
+    response = requests.get(API_URL, headers=headers)
     if response.status_code == 200:
-        return pd.DataFrame(response.json().get("data", []))
+        return response.json().get("data", {})
     else:
-        st.error(f"Error fetching data: {response.status_code} - {response.text}")
-        return pd.DataFrame()
+        st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
+        return None
+
+# Function to load the previous price
+def load_previous_price():
+    if os.path.exists(PREVIOUS_PRICE_FILE):
+        with open(PREVIOUS_PRICE_FILE, "r") as file:
+            return json.load(file).get("price", None)
+    return None
+
+# Function to save the latest price
+def save_latest_price(price):
+    with open(PREVIOUS_PRICE_FILE, "w") as file:
+        json.dump({"price": price}, file)
 
 # Streamlit App
-st.title("Historical Oil Price Viewer")
-st.write("View oil price data for a custom date range using the Oil Price API.")
+st.title("Oil Price Notification Viewer")
+st.write("This app retrieves the most recent oil price and alerts you for significant changes.")
 
-# Sidebar Input for Date Range
-st.sidebar.header("Input Date Range")
-start_date = st.sidebar.date_input("Start Date", value=pd.Timestamp("2023-01-01"))
-end_date = st.sidebar.date_input("End Date", value=pd.Timestamp("2023-12-31"))
+# Fetch the latest oil price
+latest_data = fetch_latest_oil_price()
 
-if start_date > end_date:
-    st.sidebar.error("Start Date must be before End Date.")
+if latest_data:
+    # Extract price, currency, and timestamp
+    price = float(latest_data.get("price", 0))
+    timestamp = latest_data.get("timestamp")
+    currency = latest_data.get("currency")
 
-# Fetch and display data
-if st.sidebar.button("Fetch Data"):
-    st.subheader("Fetching Data...")
-    data = fetch_historical_oil_prices(start_date.isoformat(), end_date.isoformat())
+    # Display the latest price information
+    st.subheader("Latest Oil Price Information")
+    st.write(f"**Price:** {price} {currency}")
+    st.write(f"**Timestamp:** {timestamp}")
 
-    if not data.empty:
-        # Process the data
-        data["time"] = pd.to_datetime(data["time"])
-        data["price"] = data["price"].astype(float)
+    # Load the previous price
+    previous_price = load_previous_price()
 
-        # Display Data
-        st.write(f"### Data from {start_date} to {end_date}")
-        st.write(data.head())
-
-        # Visualization
-        st.subheader("Oil Price Trends")
-        plt.figure(figsize=(10, 6))
-        plt.plot(data["time"], data["price"], marker="o", label="Oil Prices (USD)")
-        plt.title("Oil Price Trends")
-        plt.xlabel("Date")
-        plt.ylabel("Price (USD per Barrel)")
-        plt.grid()
-        plt.legend()
-        st.pyplot(plt)
+    # Check for significant change
+    if previous_price:
+        price_change = ((price - previous_price) / previous_price) * 100
+        if abs(price_change) >= 5:  # Set threshold for significant change
+            st.warning(f"Significant Price Change Detected: {price_change:.2f}%")
+        else:
+            st.info(f"Price Change: {price_change:.2f}% (within normal range)")
     else:
-        st.error("No data available for the selected date range.")
+        st.info("No previous price found. This is the first recorded value.")
+
+    # Save the latest price
+    save_latest_price(price)
+
+    # Display raw API data
+    st.subheader("Raw API Response")
+    st.json(latest_data)
+else:
+    st.error("No data available. Please check the API or your connection.")
