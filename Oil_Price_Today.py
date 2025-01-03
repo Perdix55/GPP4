@@ -2,6 +2,10 @@ import requests
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import pytz
+import schedule
+import time
 
 # API Endpoint and Key
 HISTORICAL_API_URL = "https://api.oilpriceapi.com/v1/prices"
@@ -21,26 +25,39 @@ def fetch_historical_oil_prices(api_url, api_key):
         st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
         return pd.DataFrame()
 
+# Function to save fetched data locally
+def save_historical_data():
+    data = fetch_historical_oil_prices(HISTORICAL_API_URL, API_KEY)
+    if not data.empty:
+        data.to_csv("historical_oil_prices.csv", index=False)
+        print("Data saved successfully.")
+    else:
+        print("No data available to save.")
+
+# Schedule the task to run daily at 8:00 AM EST
+def schedule_daily_check():
+    est = pytz.timezone("US/Eastern")
+    now = datetime.now(tz=est)
+    print(f"Scheduler running at {now.strftime('%Y-%m-%d %H:%M:%S')} EST")
+
+schedule.every().day.at("08:00").do(save_historical_data)
+
 # Streamlit App
 st.title("Oil Price Trends and Analysis")
 st.write("This app retrieves historical oil price data and visualizes it.")
 
-# Fetch historical data
-st.subheader("Fetching Historical Data...")
-data = fetch_historical_oil_prices(HISTORICAL_API_URL, API_KEY)
-
-if not data.empty:
-    # Process the data
-    data["date"] = pd.to_datetime(data["time"])  # Convert timestamp to datetime
+# Fetch or load historical data
+try:
+    data = pd.read_csv("historical_oil_prices.csv")
+    data["date"] = pd.to_datetime(data["time"])
     data["price"] = data["price"].astype(float)
-    data = data.sort_values("date")  # Sort data by date
+    data = data.sort_values("date")
+except FileNotFoundError:
+    st.error("No cached data found. Please wait until the next scheduled update.")
 
-    # Display raw data
-    st.write(f"### Total Records Retrieved: {len(data)}")
-    st.write("#### Sample Data:")
-    st.write(data[["date", "price"]].head())
-
-    # Visualization: Line Chart of Oil Prices
+# Display data if available
+if not data.empty:
+    # Visualization
     st.subheader("Oil Price Trends Over Time")
     plt.figure(figsize=(10, 5))
     plt.plot(data["date"], data["price"], marker="o", label="Oil Prices (USD)")
@@ -54,4 +71,16 @@ if not data.empty:
     # Insights
     st.subheader("Insights and Trends")
     st.write(f"Most Recent Price: ${data['price'].iloc[-1]:.2f} on {data['date'].iloc[-1].strftime('%Y-%m-%d')}")
-    st.write(f"Oldest Price: ${data
+    st.write(f"Oldest Price: ${data['price'].iloc[0]:.2f} on {data['date'].iloc[0].strftime('%Y-%m-%d')}")
+    if data["price"].iloc[-1] > data["price"].iloc[-2]:
+        st.write("Oil prices have increased in the most recent period.")
+    else:
+        st.write("Oil prices have decreased in the most recent period.")
+
+else:
+    st.error("No historical data available to visualize.")
+
+# Run the scheduler in the background
+while True:
+    schedule.run_pending()
+    time.sleep(1)
