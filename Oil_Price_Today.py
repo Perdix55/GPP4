@@ -39,7 +39,7 @@ def schedule_daily_check():
     est = pytz.timezone("US/Eastern")
     now = datetime.now(tz=est)
     print(f"Scheduler running at {now.strftime('%Y-%m-%d %H:%M:%S')} EST")
-schedule.every().day.at("08:00").do(save_historical_data)
+schedule.every().day.at("09:00").do(save_historical_data)
 
 # Fetch or load historical data
 if os.path.exists(CACHE_FILE):
