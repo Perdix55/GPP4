@@ -10,10 +10,12 @@ PREVIOUS_PRICE_FILE = "previous_price.json"
 
 # Function to fetch the latest oil price
 def fetch_latest_oil_price():
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-    }
+    #headers = {
+       # "Authorization": f"Bearer {API_KEY}",
+       # "Content-Type": "application/json",
+    }#
+    -H 'Authorization: Token 2cdd3408dc07625b07f0e294e2e9c1767be6363874694b89beccc6d8f14359e1' \
+-H 'Content-Type: application/json'
     response = requests.get(API_URL, headers=headers)
     if response.status_code == 200:
         return response.json().get("data", {})
